@@ -4,7 +4,8 @@ import warnings
 from datetime import datetime
 from autogram import get_openai_key
 import sys
-
+import os
+from moviepy.editor import VideoFileClip, concatenate_videoclips
 from autogram.crew import Autogram
 
 warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
@@ -14,25 +15,60 @@ warnings.filterwarnings("ignore", category=SyntaxWarning, module="pysbd")
 # Replace with inputs you want to test with, it will automatically
 # interpolate any tasks and agents information
 
+def merge_two_videos(video1_path: str, video2_path: str, output_path: str = "outputs/final_reel.mp4"):
+
+    os.makedirs("outputs", exist_ok=True)
+
+    clip1 = VideoFileClip(video1_path)
+    clip2 = VideoFileClip(video2_path)
+
+    final = concatenate_videoclips([clip1, clip2], method="compose")
+    final = final.crossfadein(0.5).crossfadeout(0.5)
+    final = final.resize(height=1920).set_fps(30)
+
+    final.write_videofile(
+        output_path,
+        codec="libx264",
+        audio_codec="aac",
+        preset="medium",
+        bitrate="8000k",
+        threads=6,
+        logger=None
+    )
+
+    print(f"Successfully merged → {output_path}")
+    clip1.close()
+    clip2.close()
+    final.close()
+    return output_path
+
+
 def run():
-    """
-    Run the crew for neuroscience content extraction.
-    """
+
     inputs = {
         'current_year': str(datetime.now().year)
     }
-    
-    api_key = get_openai_key()
-    if not api_key:
-        print("Warning: OPENAI_API_KEY not found in environment.\n"
-              "Create a .env file (see .env.example) and add your key as OPENAI_API_KEY=YOUR_KEY\n"
-              "The crew will likely fail without a valid key.")
-        # Continue anyway so users can run non-API parts or see more errors
 
+    if not get_openai_key():
+        print("Warning: OPENAI_API_KEY not set. Some agents may fail.")
+
+    print("Starting CrewAI neuroscience reel generation...")
     try:
         Autogram().crew().kickoff(inputs=inputs)
     except Exception as e:
-        raise Exception(f"An error occurred while running the crew: {e}")
+        raise Exception(f"Crew failed: {e}")
+
+    video1 = "outputs/part1.mp4"   # dummy vids for now, replace with generated vids path
+    video2 = "outputs/part2.mp4"
+
+    if os.path.exists(video1) and os.path.exists(video2):
+        final_video = merge_two_videos(video1, video2, "outputs/final_reel.mp4")
+        print(f"FINAL REEL READY: {final_video}")
+        print("Next step: Upload via Instagram Graph API")
+    else:
+        print("ERROR: Could not find one or both video parts.")
+        print(f"Looking for:\n  {video1}\n  {video2}")
+        print("Check your Google Veo output paths/filenames.")
 
 
 def train():
